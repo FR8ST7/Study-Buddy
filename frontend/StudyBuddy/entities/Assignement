@@ -1,0 +1,86 @@
+{
+  "name": "Assignment",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Title of the assignment"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the assignment"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject or course name"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the assignment is due"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium",
+      "description": "Priority level"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "completed",
+        "submitted"
+      ],
+      "default": "not_started",
+      "description": "Current status"
+    },
+    "progress": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0,
+      "description": "Progress percentage"
+    },
+    "file_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Uploaded assignment files"
+    },
+    "ai_draft": {
+      "type": "string",
+      "description": "AI-generated draft or assistance"
+    },
+    "grade": {
+      "type": "string",
+      "description": "Grade received"
+    },
+    "teacher_feedback": {
+      "type": "string",
+      "description": "Feedback from teacher"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the assignment was submitted"
+    }
+  },
+  "required": [
+    "title",
+    "subject",
+    "due_date"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

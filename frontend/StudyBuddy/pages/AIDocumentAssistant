@@ -1,0 +1,403 @@
+
+import React, { useState, useEffect } from "react";
+import { Document } from "@/entities/Document";
+import { Flashcard } from "@/entities/Flashcard";
+import { User } from "@/entities/User";
+import { UploadFile, InvokeLLM, ExtractDataFromUploadedFile } from "@/integrations/Core";
+import { FileText, Upload, Sparkles, BookOpen, Brain, Download, Mic, Volume2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown from "react-markdown";
+
+export default function AIDocumentAssistant() {
+  const [documents, setDocuments] = useState([]);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [explanation, setExplanation] = useState(null);
+  const [explanationMode, setExplanationMode] = useState("simple");
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  useEffect(() => {
+    loadDocuments();
+  }, []);
+
+  const loadDocuments = async () => {
+    try {
+      const user = await User.me();
+      const docs = await Document.filter({ created_by: user.email }, "-created_date");
+      setDocuments(docs);
+    } catch (error) {
+      console.error("Failed to load documents:", error);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const { file_url } = await UploadFile({ file });
+      setUploadedFile({ name: file.name, url: file_url, type: getFileType(file.name) });
+      await processDocument(file.name, file_url, getFileType(file.name));
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Failed to upload file. Please try again.");
+    }
+    setIsUploading(false);
+  };
+
+  const getFileType = (filename) => {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (['pdf'].includes(ext)) return 'pdf';
+    if (['doc', 'docx'].includes(ext)) return 'doc';
+    if (['jpg', 'jpeg', 'png'].includes(ext)) return 'image';
+    if (['ppt', 'pptx'].includes(ext)) return 'ppt';
+    return 'txt';
+  };
+
+  const processDocument = async (title, fileUrl, fileType) => {
+    setIsProcessing(true);
+    try {
+      const summaryPrompt = `Analyze this document and provide: 1) A comprehensive summary (3-4 paragraphs), 2) List 5-7 key concepts covered. Format as JSON.`;
+      
+      const analysis = await InvokeLLM({
+        prompt: summaryPrompt,
+        file_urls: [fileUrl],
+        response_json_schema: {
+          type: "object",
+          properties: {
+            summary: { type: "string" },
+            key_concepts: { type: "array", items: { type: "string" } }
+          }
+        }
+      });
+
+      const doc = await Document.create({
+        title,
+        file_url: fileUrl,
+        file_type: fileType,
+        summary: analysis.summary,
+        key_concepts: analysis.key_concepts,
+        subject: "General"
+      });
+
+      setSelectedDoc(doc);
+      loadDocuments();
+    } catch (error) {
+      console.error("Processing failed:", error);
+      alert("Failed to process document. Please try again.");
+    }
+    setIsProcessing(false);
+  };
+
+  const generateQuizzes = async () => {
+    if (!selectedDoc) return;
+    setIsProcessing(true);
+
+    try {
+      const quizPrompt = `Based on this document, generate 10 multiple choice questions with 4 options each and indicate the correct answer. Make them challenging but fair.`;
+      
+      const quizzes = await InvokeLLM({
+        prompt: quizPrompt,
+        file_urls: [selectedDoc.file_url],
+        response_json_schema: {
+          type: "object",
+          properties: {
+            quizzes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  question: { type: "string" },
+                  options: { type: "array", items: { type: "string" } },
+                  correct_answer: { type: "string" }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      await Document.update(selectedDoc.id, { generated_quizzes: quizzes.quizzes });
+      setSelectedDoc({ ...selectedDoc, generated_quizzes: quizzes.quizzes });
+      alert(`Generated ${quizzes.quizzes.length} quiz questions!`);
+    } catch (error) {
+      console.error("Quiz generation failed:", error);
+      alert("Failed to generate quizzes. Please try again.");
+    }
+    setIsProcessing(false);
+  };
+
+  const generateFlashcards = async () => {
+    if (!selectedDoc) return;
+    setIsProcessing(true);
+
+    try {
+      const flashcardPrompt = `Create 15 flashcards from this document. Each should have a concise question and a clear answer focusing on key concepts.`;
+      
+      const flashcards = await InvokeLLM({
+        prompt: flashcardPrompt,
+        file_urls: [selectedDoc.file_url],
+        response_json_schema: {
+          type: "object",
+          properties: {
+            flashcards: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  question: { type: "string" },
+                  answer: { type: "string" }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      for (const card of flashcards.flashcards) {
+        await Flashcard.create({
+          question: card.question,
+          answer: card.answer,
+          subject: selectedDoc.subject,
+          difficulty: "medium"
+        });
+      }
+
+      alert(`Generated ${flashcards.flashcards.length} flashcards and added them to your collection!`);
+    } catch (error) {
+      console.error("Flashcard generation failed:", error);
+      alert("Failed to generate flashcards. Please try again.");
+    }
+    setIsProcessing(false);
+  };
+
+  const explainConcept = async (concept) => {
+    setIsProcessing(true);
+    try {
+      let prompt = "";
+      switch (explanationMode) {
+        case "simple":
+          prompt = `Explain "${concept}" in very simple terms as if to a beginner. Use everyday language and analogies.`;
+          break;
+        case "detailed":
+          prompt = `Provide a detailed, comprehensive explanation of "${concept}" with technical depth and examples.`;
+          break;
+        case "analogy":
+          prompt = `Explain "${concept}" using real-life analogies and relatable examples that make it easy to understand.`;
+          break;
+        case "visual":
+          prompt = `Describe "${concept}" in a way that creates a visual mental model. Include descriptions of diagrams or visual representations.`;
+          break;
+      }
+
+      const response = await InvokeLLM({ 
+        prompt,
+        file_urls: selectedDoc ? [selectedDoc.file_url] : []
+      });
+      setExplanation({ concept, content: response, mode: explanationMode });
+    } catch (error) {
+      console.error("Explanation failed:", error);
+      alert("Failed to generate explanation. Please try again.");
+    }
+    setIsProcessing(false);
+  };
+
+  const handleVoiceInput = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert("Voice recognition is not supported in your browser.");
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript;
+      await explainConcept(transcript);
+    };
+
+    recognition.start();
+  };
+
+  const speakText = (text) => {
+    if ('speechSynthesis' in window) {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const inputStyle = "w-full p-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#87CEEB] neo-shadow-small";
+  const buttonStyle = "py-3 px-6 bg-[#98FB98] border-2 border-black rounded-lg neo-shadow hover:neo-shadow-small active:shadow-none transform active:translate-x-[2px] active:translate-y-[2px] transition-all duration-150 font-bold";
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center">
+        <Sparkles className="mx-auto h-16 w-16 mb-4 text-purple-600" />
+        <h1 className="text-4xl font-bold">AI Document Assistant</h1>
+        <p className="text-lg text-gray-700 mt-2">
+          Upload documents for AI-powered summaries, quizzes, and explanations
+        </p>
+      </div>
+
+      {/* Upload Section */}
+      <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+        <div className="text-center">
+          <input
+            type="file"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="doc-upload"
+            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.ppt,.pptx"
+            disabled={isUploading}
+          />
+          <label
+            htmlFor="doc-upload"
+            className={`${buttonStyle} inline-flex items-center gap-2 cursor-pointer`}
+          >
+            <Upload className="w-5 h-5" />
+            {isUploading ? "Uploading..." : "Upload Document"}
+          </label>
+          <p className="text-sm text-gray-600 mt-3">
+            Supports: PDF, Word, PowerPoint, Images, Text files
+          </p>
+        </div>
+      </div>
+
+      {isProcessing && (
+        <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-black mx-auto mb-4"></div>
+          <p className="font-bold">Processing document with AI...</p>
+        </div>
+      )}
+
+      {/* Document Analysis */}
+      {selectedDoc && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              <FileText className="w-6 h-6" />
+              {selectedDoc.title}
+            </h2>
+            
+            <div className="mb-6">
+              <h3 className="text-xl font-bold mb-2">AI Summary</h3>
+              <div className="p-4 bg-blue-50 border-2 border-black rounded-lg">
+                <ReactMarkdown>{selectedDoc.summary}</ReactMarkdown>
+              </div>
+            </div>
+
+            {selectedDoc.key_concepts && selectedDoc.key_concepts.length > 0 && (
+              <diSv className="mb-6">
+                <h3 className="text-xl font-bold mb-3">Key Concepts</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {selectedDoc.key_concepts.map((concept, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => explainConcept(concept)}
+                      className="p-3 bg-purple-100 border-2 border-black rounded-lg text-left hover:bg-purple-200 transition-colors"
+                    >
+                      <span className="font-semibold">💡 {concept}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-4">
+              <button onClick={generateQuizzes} className={buttonStyle} disabled={isProcessing}>
+                <Brain className="w-5 h-5 mr-2" />
+                Generate Quizzes
+              </button>
+              <button onClick={generateFlashcards} className={buttonStyle} disabled={isProcessing}>
+                <BookOpen className="w-5 h-5 mr-2" />
+                Generate Flashcards
+              </button>
+            </div>
+          </div>
+
+          {/* Concept Explanation */}
+          <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+            <h3 className="text-xl font-bold mb-4">Ask for Explanation</h3>
+            <div className="mb-4 flex gap-2 flex-wrap">
+              {["simple", "detailed", "analogy", "visual"].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setExplanationMode(mode)}
+                  className={`px-4 py-2 border-2 border-black rounded-lg font-semibold capitalize ${
+                    explanationMode === mode ? 'bg-[#87CEEB]' : 'bg-white'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+              <button
+                onClick={handleVoiceInput}
+                className={`px-4 py-2 border-2 border-black rounded-lg font-semibold ${
+                  isListening ? 'bg-red-300 animate-pulse' : 'bg-white'
+                }`}
+                disabled={isListening}
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+            </div>
+
+            {explanation && (
+              <div className="p-4 bg-yellow-50 border-2 border-black rounded-lg">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-lg">Explaining: {explanation.concept}</h4>
+                  <button
+                    onClick={() => speakText(explanation.content)}
+                    className="p-2 bg-white border-2 border-black rounded-lg"
+                    disabled={isSpeaking}
+                  >
+                    <Volume2 className={`w-5 h-5 ${isSpeaking ? 'animate-pulse' : ''}`} />
+                  </button>
+                </div>
+                <ReactMarkdown className="prose max-w-none">{explanation.content}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Document Library */}
+      {documents.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Your Documents</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {documents.map(doc => (
+              <button
+                key={doc.id}
+                onClick={() => setSelectedDoc(doc)}
+                className={`p-4 border-4 border-black rounded-xl text-left transition-all ${
+                  selectedDoc?.id === doc.id ? 'bg-[#87CEEB] neo-shadow' : 'bg-white neo-shadow hover:neo-shadow-small'
+                }`}
+              >
+                <FileText className="w-8 h-8 mb-2" />
+                <h3 className="font-bold truncate">{doc.title}</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {doc.key_concepts?.length || 0} concepts • {doc.file_type}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

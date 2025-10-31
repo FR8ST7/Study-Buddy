@@ -1,0 +1,145 @@
+{
+  "name": "Timetable",
+  "type": "object",
+  "properties": {
+    "day_of_week": {
+      "type": "string",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "description": "Day of the week"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "Start time (HH:MM format)"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "End time (HH:MM format)"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject or activity name"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "class",
+        "lab",
+        "tutorial",
+        "study",
+        "break",
+        "other"
+      ],
+      "default": "class",
+      "description": "Type of activity"
+    },
+    "location": {
+      "type": "string",
+      "description": "Physical location or meeting link"
+    },
+    "teacher_name": {
+      "type": "string",
+      "description": "Teacher or instructor name"
+    },
+    "color": {
+      "type": "string",
+      "default": "#98FB98",
+      "description": "Color for visual identification"
+    },
+    "is_recurring": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this repeats weekly"
+    }
+  },
+  "required": [
+    "day_of_week",
+    "start_time",
+    "end_time",
+    "subject"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}{
+  "name": "Timetable",
+  "type": "object",
+  "properties": {
+    "day_of_week": {
+      "type": "string",
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "description": "Day of the week"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "Start time (HH:MM format)"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "End time (HH:MM format)"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject or activity name"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "class",
+        "lab",
+        "tutorial",
+        "study",
+        "break",
+        "other"
+      ],
+      "default": "class",
+      "description": "Type of activity"
+    },
+    "location": {
+      "type": "string",
+      "description": "Physical location or meeting link"
+    },
+    "teacher_name": {
+      "type": "string",
+      "description": "Teacher or instructor name"
+    },
+    "color": {
+      "type": "string",
+      "default": "#98FB98",
+      "description": "Color for visual identification"
+    },
+    "is_recurring": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this repeats weekly"
+    }
+  },
+  "required": [
+    "day_of_week",
+    "start_time",
+    "end_time",
+    "subject"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

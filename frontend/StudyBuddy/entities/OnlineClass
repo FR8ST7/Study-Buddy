@@ -1,0 +1,83 @@
+{
+  "name": "OnlineClass",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Class title"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject name"
+    },
+    "scheduled_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Scheduled class time"
+    },
+    "duration": {
+      "type": "number",
+      "default": 60,
+      "description": "Class duration in minutes"
+    },
+    "meeting_link": {
+      "type": "string",
+      "description": "Online meeting link"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "google_meet",
+        "zoom",
+        "teams",
+        "other"
+      ],
+      "description": "Meeting platform"
+    },
+    "transcription": {
+      "type": "string",
+      "description": "AI-generated transcription"
+    },
+    "summary": {
+      "type": "string",
+      "description": "AI-generated summary"
+    },
+    "key_concepts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Key concepts from class"
+    },
+    "action_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Next steps and action items"
+    },
+    "recording_url": {
+      "type": "string",
+      "description": "Recording URL if available"
+    },
+    "notes_pdf_url": {
+      "type": "string",
+      "description": "Generated PDF notes URL"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "ongoing",
+        "completed"
+      ],
+      "default": "scheduled",
+      "description": "Class status"
+    }
+  },
+  "required": [
+    "title",
+    "subject",
+    "scheduled_time"
+  ]
+}

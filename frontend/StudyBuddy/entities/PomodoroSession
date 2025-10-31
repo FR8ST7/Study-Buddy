@@ -1,0 +1,47 @@
+{
+  "name": "PomodoroSession",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Session date"
+    },
+    "work_duration": {
+      "type": "number",
+      "default": 25,
+      "description": "Work duration in minutes"
+    },
+    "break_duration": {
+      "type": "number",
+      "default": 5,
+      "description": "Break duration in minutes"
+    },
+    "completed_cycles": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of completed pomodoro cycles"
+    },
+    "total_focus_time": {
+      "type": "number",
+      "default": 0,
+      "description": "Total focus time in minutes"
+    },
+    "subject": {
+      "type": "string",
+      "description": "What was studied during this session"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Session notes"
+    }
+  },
+  "required": [
+    "date"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

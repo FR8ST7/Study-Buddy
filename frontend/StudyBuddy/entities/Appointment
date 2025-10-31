@@ -1,0 +1,65 @@
+{
+  "name": "Appointment",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Meeting title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Purpose of the appointment"
+    },
+    "teacher_email": {
+      "type": "string",
+      "description": "Email of the teacher"
+    },
+    "student_email": {
+      "type": "string",
+      "description": "Email of the student"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date and time of appointment"
+    },
+    "duration": {
+      "type": "number",
+      "default": 30,
+      "description": "Duration in minutes"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "confirmed",
+        "completed",
+        "cancelled"
+      ],
+      "default": "pending",
+      "description": "Appointment status"
+    },
+    "meeting_link": {
+      "type": "string",
+      "description": "Online meeting link if virtual"
+    },
+    "key_takeaways": {
+      "type": "string",
+      "description": "Notes from the meeting"
+    },
+    "requested_by": {
+      "type": "string",
+      "enum": [
+        "student",
+        "teacher"
+      ],
+      "description": "Who initiated the appointment"
+    }
+  },
+  "required": [
+    "title",
+    "teacher_email",
+    "student_email",
+    "scheduled_date"
+  ]
+}

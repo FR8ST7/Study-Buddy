@@ -1,0 +1,66 @@
+{
+  "name": "Document",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Document title"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "URL of uploaded document"
+    },
+    "file_type": {
+      "type": "string",
+      "enum": [
+        "pdf",
+        "doc",
+        "docx",
+        "txt",
+        "image",
+        "ppt",
+        "pptx"
+      ],
+      "description": "Type of document"
+    },
+    "summary": {
+      "type": "string",
+      "description": "AI-generated summary"
+    },
+    "key_concepts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Extracted key concepts"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject area"
+    },
+    "generated_quizzes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "AI-generated quizzes from this document"
+    },
+    "generated_flashcards": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "AI-generated flashcards"
+    }
+  },
+  "required": [
+    "title",
+    "file_url",
+    "file_type"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

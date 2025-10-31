@@ -1,0 +1,181 @@
+import React, { useState, useEffect } from "react";
+import { User } from "@/entities/User";
+import { RewardPoint } from "@/entities/RewardPoint";
+import { Trophy, Medal, Award, TrendingUp, Crown, Star } from "lucide-react";
+import { motion } from "framer-motion";
+
+export default function Leaderboard() {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [filterType, setFilterType] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, [filterType]);
+
+  const loadLeaderboard = async () => {
+    setIsLoading(true);
+    try {
+      const user = await User.me();
+      setCurrentUser(user);
+
+      // Get all users
+      const allUsers = await User.list();
+      
+      // Filter by class if needed
+      let filteredUsers = allUsers;
+      if (filterType === "class" && user.class_name) {
+        filteredUsers = allUsers.filter(u => u.class_name === user.class_name);
+      }
+
+      // Sort by total points
+      const sortedUsers = filteredUsers
+        .filter(u => u.total_points > 0)
+        .sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
+        .slice(0, 50);
+
+      setLeaderboard(sortedUsers);
+    } catch (error) {
+      console.error("Failed to load leaderboard:", error);
+    }
+    setIsLoading(false);
+  };
+
+  const getRankIcon = (rank) => {
+    if (rank === 1) return <Crown className="w-6 h-6 text-yellow-500" />;
+    if (rank === 2) return <Medal className="w-6 h-6 text-gray-400" />;
+    if (rank === 3) return <Medal className="w-6 h-6 text-orange-600" />;
+    return <span className="text-xl font-bold">#{rank}</span>;
+  };
+
+  const getRankColor = (rank) => {
+    if (rank === 1) return "bg-gradient-to-br from-yellow-200 to-yellow-300";
+    if (rank === 2) return "bg-gradient-to-br from-gray-200 to-gray-300";
+    if (rank === 3) return "bg-gradient-to-br from-orange-200 to-orange-300";
+    return "bg-white";
+  };
+
+  const currentUserRank = leaderboard.findIndex(u => u.email === currentUser?.email) + 1;
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-10">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-black mx-auto"></div>
+        <p className="mt-4 font-bold">Loading leaderboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center">
+        <Trophy className="mx-auto h-16 w-16 mb-4 text-yellow-600" />
+        <h1 className="text-4xl font-bold">Leaderboard</h1>
+        <p className="text-lg text-gray-700 mt-2">
+          See how you rank among your peers!
+        </p>
+      </div>
+
+      {/* Your Rank Card */}
+      {currentUserRank > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-6 bg-gradient-to-br from-purple-200 to-pink-200 border-4 border-black rounded-xl neo-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-white border-4 border-black rounded-full flex items-center justify-center">
+                <Star className="w-8 h-8 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold">Your Rank: #{currentUserRank}</h3>
+                <p className="text-lg">Level {currentUser?.current_level || 1} • {currentUser?.total_points || 0} points</p>
+              </div>
+            </div>
+            <TrendingUp className="w-12 h-12 text-purple-600" />
+          </div>
+        </motion.div>
+      )}
+
+      {/* Filter Buttons */}
+      <div className="flex gap-4 justify-center">
+        <button
+          onClick={() => setFilterType("all")}
+          className={`px-6 py-3 border-2 border-black rounded-lg font-bold transition-all ${
+            filterType === "all" 
+              ? "bg-[#98FB98] neo-shadow" 
+              : "bg-white hover:neo-shadow-small"
+          }`}
+        >
+          All Students
+        </button>
+        {currentUser?.class_name && (
+          <button
+            onClick={() => setFilterType("class")}
+            className={`px-6 py-3 border-2 border-black rounded-lg font-bold transition-all ${
+              filterType === "class" 
+                ? "bg-[#87CEEB] neo-shadow" 
+                : "bg-white hover:neo-shadow-small"
+            }`}
+          >
+            My Class ({currentUser.class_name})
+          </button>
+        )}
+      </div>
+
+      {/* Leaderboard List */}
+      <div className="space-y-4">
+        {leaderboard.map((user, index) => {
+          const rank = index + 1;
+          const isCurrentUser = user.email === currentUser?.email;
+
+          return (
+            <motion.div
+              key={user.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className={`p-5 border-4 border-black rounded-xl neo-shadow ${getRankColor(rank)} ${
+                isCurrentUser ? "ring-4 ring-purple-500" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 flex items-center justify-center">
+                    {getRankIcon(rank)}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      {user.full_name}
+                      {isCurrentUser && <span className="ml-2 text-purple-600">(You)</span>}
+                    </h3>
+                    <p className="text-sm text-gray-700">
+                      {user.class_name && `Class ${user.class_name} • `}
+                      Level {user.current_level || 1}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-green-600">{user.total_points || 0}</p>
+                  <p className="text-sm text-gray-600">points</p>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {leaderboard.length === 0 && (
+        <div className="text-center py-10 px-6 bg-white border-4 border-black rounded-xl neo-shadow">
+          <Trophy className="mx-auto h-16 w-16 mb-4 text-gray-300" />
+          <h3 className="text-2xl font-bold">No Rankings Yet</h3>
+          <p className="mt-2 text-gray-600">
+            Start earning points to appear on the leaderboard!
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

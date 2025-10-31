@@ -1,0 +1,42 @@
+{
+  "name": "StudyGroup",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Study group name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Group description"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Primary subject focus"
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of member emails"
+    },
+    "admin_email": {
+      "type": "string",
+      "description": "Group admin email"
+    },
+    "meeting_schedule": {
+      "type": "string",
+      "description": "Regular meeting schedule"
+    },
+    "ai_summary": {
+      "type": "string",
+      "description": "AI-generated group progress summary"
+    }
+  },
+  "required": [
+    "name",
+    "subject",
+    "admin_email"
+  ]
+}

@@ -1,0 +1,330 @@
+import React, { useState, useEffect } from "react";
+import { StudyGroup } from "@/entities/StudyGroup";
+import { User } from "@/entities/User";
+import { InvokeLLM } from "@/integrations/Core";
+import { Users, Plus, UserPlus, Settings, Sparkles, TrendingUp } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
+
+export default function StudyGroups() {
+  const [groups, setGroups] = useState([]);
+  const [myGroups, setMyGroups] = useState([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    subject: "",
+    meeting_schedule: ""
+  });
+
+  const subjects = ["Math", "Science", "English", "History", "Geography", "Physics", "Chemistry", "Biology", "Computer Science", "Literature"];
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const currentUser = await User.me();
+      setUser(currentUser);
+
+      const allGroups = await StudyGroup.list();
+      
+      // Groups I'm a member of
+      const userGroups = allGroups.filter(g => 
+        g.admin_email === currentUser.email || 
+        (g.members && g.members.includes(currentUser.email))
+      );
+      setMyGroups(userGroups);
+
+      // All available groups
+      setGroups(allGroups);
+    } catch (error) {
+      console.error("Failed to load study groups:", error);
+    }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.subject) {
+      alert("Please fill in required fields");
+      return;
+    }
+
+    try {
+      await StudyGroup.create({
+        ...formData,
+        admin_email: user.email,
+        members: [user.email]
+      });
+      setFormData({ name: "", description: "", subject: "", meeting_schedule: "" });
+      setShowCreateForm(false);
+      loadData();
+    } catch (error) {
+      console.error("Failed to create group:", error);
+    }
+  };
+
+  const joinGroup = async (group) => {
+    if (group.members && group.members.includes(user.email)) {
+      alert("You're already a member of this group!");
+      return;
+    }
+
+    try {
+      const updatedMembers = [...(group.members || []), user.email];
+      await StudyGroup.update(group.id, { members: updatedMembers });
+      loadData();
+      alert(`Successfully joined ${group.name}!`);
+    } catch (error) {
+      console.error("Failed to join group:", error);
+    }
+  };
+
+  const generateGroupSummary = async (group) => {
+    setIsGeneratingSummary(true);
+    setSelectedGroup(group);
+
+    try {
+      const prompt = `Generate a study group progress summary for "${group.name}" (${group.subject}). Include:
+1. Group overview and goals
+2. Suggested study topics for the next week
+3. Collaboration tips
+4. 3 challenge questions for the group to solve together
+Keep it motivating and under 200 words.`;
+
+      const summary = await InvokeLLM({ prompt });
+      
+      await StudyGroup.update(group.id, { ai_summary: summary });
+      loadData();
+      alert("Group summary generated!");
+    } catch (error) {
+      console.error("Failed to generate summary:", error);
+    }
+    setIsGeneratingSummary(false);
+  };
+
+  const inputStyle = "w-full p-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#87CEEB] neo-shadow-small";
+  const buttonStyle = "py-3 px-6 border-2 border-black rounded-lg neo-shadow hover:neo-shadow-small active:shadow-none transform active:translate-x-[2px] active:translate-y-[2px] transition-all duration-150 font-bold";
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center">
+        <Users className="mx-auto h-16 w-16 mb-4" />
+        <h1 className="text-4xl font-bold">Study Groups</h1>
+        <p className="text-lg text-gray-700 mt-2">
+          Collaborate with peers and learn together!
+        </p>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className={`${buttonStyle} bg-[#98FB98] flex items-center gap-2`}
+        >
+          <Plus className="w-5 h-5" />
+          Create Group
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showCreateForm && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="p-6 bg-white border-4 border-black rounded-xl neo-shadow"
+          >
+            <h3 className="text-2xl font-bold mb-4">Create Study Group</h3>
+            <form onSubmit={handleCreateGroup} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="font-bold block mb-1">Group Name*</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className={inputStyle}
+                    placeholder="e.g., Physics Study Squad"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Subject*</label>
+                  <select
+                    value={formData.subject}
+                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                    className={inputStyle}
+                  >
+                    <option value="">Select Subject</option>
+                    {subjects.map(subject => (
+                      <option key={subject} value={subject}>{subject}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className={inputStyle + " h-24"}
+                  placeholder="What will your group focus on?"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Meeting Schedule</label>
+                <input
+                  type="text"
+                  value={formData.meeting_schedule}
+                  onChange={(e) => setFormData({ ...formData, meeting_schedule: e.target.value })}
+                  className={inputStyle}
+                  placeholder="e.g., Every Monday at 5 PM"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className={`${buttonStyle} bg-gray-300 flex-1`}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className={`${buttonStyle} bg-[#98FB98] flex-1`}>
+                  Create Group
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* My Groups */}
+      {myGroups.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-bold mb-4">My Groups</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {myGroups.map(group => (
+              <motion.div
+                key={group.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 bg-gradient-to-br from-blue-100 to-purple-100 border-4 border-black rounded-xl neo-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-xl font-bold">{group.name}</h3>
+                    <p className="text-sm text-gray-700">{group.subject}</p>
+                  </div>
+                  {group.admin_email === user?.email && (
+                    <span className="px-2 py-1 bg-yellow-300 border-2 border-black rounded text-xs font-bold">
+                      Admin
+                    </span>
+                  )}
+                </div>
+
+                {group.description && (
+                  <p className="text-sm mb-3">{group.description}</p>
+                )}
+
+                {group.meeting_schedule && (
+                  <p className="text-sm text-gray-700 mb-3">
+                    📅 {group.meeting_schedule}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4" />
+                  <span className="text-sm font-semibold">
+                    {group.members?.length || 0} members
+                  </span>
+                </div>
+
+                {group.ai_summary && (
+                  <div className="p-3 bg-white border-2 border-black rounded-lg mb-3">
+                    <h4 className="font-bold text-sm mb-1">AI Summary:</h4>
+                    <p className="text-xs">{group.ai_summary}</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => generateGroupSummary(group)}
+                  disabled={isGeneratingSummary}
+                  className={`${buttonStyle} w-full bg-purple-300 text-sm flex items-center justify-center gap-2`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {isGeneratingSummary && selectedGroup?.id === group.id 
+                    ? "Generating..." 
+                    : "Generate AI Summary"}
+                </button>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All Groups */}
+      <div>
+        <h2 className="text-2xl font-bold mb-4">All Study Groups</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {groups.map(group => {
+            const isMember = group.members && group.members.includes(user?.email);
+
+            return (
+              <motion.div
+                key={group.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-5 bg-white border-4 border-black rounded-xl neo-shadow"
+              >
+                <h3 className="text-lg font-bold mb-2">{group.name}</h3>
+                <p className="text-sm text-gray-600 mb-2">{group.subject}</p>
+                
+                {group.description && (
+                  <p className="text-sm mb-3">{group.description}</p>
+                )}
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4" />
+                  <span className="text-sm">
+                    {group.members?.length || 0} members
+                  </span>
+                </div>
+
+                {!isMember ? (
+                  <button
+                    onClick={() => joinGroup(group)}
+                    className={`${buttonStyle} w-full bg-[#87CEEB] text-sm flex items-center justify-center gap-2`}
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Join Group
+                  </button>
+                ) : (
+                  <div className="text-center py-2 bg-green-200 border-2 border-black rounded-lg font-bold text-sm">
+                    ✓ Member
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {groups.length === 0 && (
+        <div className="text-center py-10 px-6 bg-white border-4 border-black rounded-xl neo-shadow">
+          <Users className="mx-auto h-16 w-16 mb-4 text-gray-300" />
+          <h3 className="text-2xl font-bold">No Study Groups Yet</h3>
+          <p className="mt-2 text-gray-600">
+            Be the first to create a study group!
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

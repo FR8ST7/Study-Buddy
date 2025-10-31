@@ -1,0 +1,291 @@
+import React, { useState, useEffect } from "react";
+import { PomodoroSession } from "@/entities/PomodoroSession";
+import { User } from "@/entities/User";
+import { UserActivity } from "@/entities/UserActivity";
+import { RewardPoint } from "@/entities/RewardPoint";
+import { Play, Pause, RotateCcw, Clock, TrendingUp } from "lucide-react";
+import { format } from "date-fns";
+import { motion } from "framer-motion";
+
+export default function PomodoroTimer() {
+  const [user, setUser] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isBreak, setIsBreak] = useState(false);
+  const [workDuration, setWorkDuration] = useState(25);
+  const [breakDuration, setBreakDuration] = useState(5);
+  const [completedCycles, setCompletedCycles] = useState(0);
+  const [currentSubject, setCurrentSubject] = useState("");
+  const [sessions, setSessions] = useState([]);
+
+  useEffect(() => {
+    loadUser();
+    loadTodaySessions();
+  }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (isRunning && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(time => time - 1);
+      }, 1000);
+    } else if (timeLeft === 0) {
+      handleTimerComplete();
+    }
+    return () => clearInterval(interval);
+  }, [isRunning, timeLeft]);
+
+  const loadUser = async () => {
+    try {
+      const currentUser = await User.me();
+      setUser(currentUser);
+      if (currentUser.preferred_pomodoro) {
+        setWorkDuration(currentUser.preferred_pomodoro.work || 25);
+        setBreakDuration(currentUser.preferred_pomodoro.break || 5);
+        setTimeLeft((currentUser.preferred_pomodoro.work || 25) * 60);
+      }
+    } catch (error) {
+      console.error("Failed to load user:", error);
+    }
+  };
+
+  const loadTodaySessions = async () => {
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const user = await User.me();
+      const todaySessions = await PomodoroSession.filter({ 
+        created_by: user.email, 
+        date: today 
+      });
+      setSessions(todaySessions);
+    } catch (error) {
+      console.error("Failed to load sessions:", error);
+    }
+  };
+
+  const handleTimerComplete = async () => {
+    setIsRunning(false);
+    
+    if (!isBreak) {
+      const newCycles = completedCycles + 1;
+      setCompletedCycles(newCycles);
+      
+      try {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const user = await User.me();
+        const existingSessions = await PomodoroSession.filter({ 
+          created_by: user.email, 
+          date: today 
+        });
+        
+        if (existingSessions.length > 0) {
+          await PomodoroSession.update(existingSessions[0].id, {
+            completed_cycles: newCycles,
+            total_focus_time: (existingSessions[0].total_focus_time || 0) + workDuration,
+            subject: currentSubject || existingSessions[0].subject,
+            notes: existingSessions[0].notes || ""
+          });
+        } else {
+          await PomodoroSession.create({
+            date: today,
+            work_duration: workDuration,
+            break_duration: breakDuration,
+            completed_cycles: newCycles,
+            total_focus_time: workDuration,
+            subject: currentSubject,
+            notes: ""
+          });
+        }
+
+        await UserActivity.create({
+          activity_type: "flashcard_studied",
+          activity_date: today,
+          details: `Completed pomodoro session: ${currentSubject || 'Study'}`
+        });
+
+        await RewardPoint.create({
+          points: 10,
+          reason: "Completed a Pomodoro session",
+          activity_type: "streak"
+        });
+
+        loadTodaySessions();
+      } catch (error) {
+        console.error("Failed to save session:", error);
+      }
+
+      alert("Great work! Time for a break! 🎉");
+      setIsBreak(true);
+      setTimeLeft(breakDuration * 60);
+    } else {
+      alert("Break's over! Ready for another session? 💪");
+      setIsBreak(false);
+      setTimeLeft(workDuration * 60);
+    }
+  };
+
+  const toggleTimer = () => {
+    setIsRunning(!isRunning);
+  };
+
+  const resetTimer = () => {
+    setIsRunning(false);
+    setIsBreak(false);
+    setTimeLeft(workDuration * 60);
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const progress = isBreak 
+    ? ((breakDuration * 60 - timeLeft) / (breakDuration * 60)) * 100
+    : ((workDuration * 60 - timeLeft) / (workDuration * 60)) * 100;
+
+  const totalFocusToday = sessions.reduce((sum, s) => sum + (s.total_focus_time || 0), 0);
+
+  const inputStyle = "w-full p-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#87CEEB] neo-shadow-small";
+  const buttonStyle = "py-4 px-8 border-2 border-black rounded-lg neo-shadow hover:neo-shadow-small active:shadow-none transform active:translate-x-[2px] active:translate-y-[2px] transition-all duration-150 font-bold text-lg";
+
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto">
+      <div className="text-center">
+        <Clock className="mx-auto h-16 w-16 mb-4" />
+        <h1 className="text-4xl font-bold">Pomodoro Focus Timer</h1>
+        <p className="text-lg text-gray-700 mt-2">
+          Stay focused and productive
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-yellow-200 border-4 border-black rounded-xl neo-shadow text-center"
+        >
+          <h3 className="text-2xl font-bold">{completedCycles}</h3>
+          <p className="text-sm font-semibold">Cycles Today</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="p-4 bg-green-200 border-4 border-black rounded-xl neo-shadow text-center"
+        >
+          <h3 className="text-2xl font-bold">{totalFocusToday}</h3>
+          <p className="text-sm font-semibold">Minutes Focused</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="p-4 bg-purple-200 border-4 border-black rounded-xl neo-shadow text-center"
+        >
+          <h3 className="text-2xl font-bold">{sessions.length}</h3>
+          <p className="text-sm font-semibold">Sessions Today</p>
+        </motion.div>
+      </div>
+
+      <div className="p-8 bg-white border-4 border-black rounded-xl neo-shadow">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold mb-2">
+            {isBreak ? "Break Time! 🌟" : "Focus Time! 🎯"}
+          </h2>
+          {!isBreak && (
+            <input
+              type="text"
+              value={currentSubject}
+              onChange={(e) => setCurrentSubject(e.target.value)}
+              placeholder="What are you working on?"
+              className={inputStyle + " text-center"}
+              disabled={isRunning}
+            />
+          )}
+        </div>
+
+        <div className="relative mb-8">
+          <div className="w-64 h-64 mx-auto rounded-full border-8 border-black bg-gradient-to-br from-yellow-200 to-orange-200 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl font-bold">{formatTime(timeLeft)}</div>
+              <div className="text-sm font-semibold mt-2">
+                {isBreak ? "Break" : "Focus"}
+              </div>
+            </div>
+          </div>
+          <svg className="absolute top-0 left-1/2 transform -translate-x-1/2 w-64 h-64 -rotate-90">
+            <circle
+              cx="128"
+              cy="128"
+              r="120"
+              fill="none"
+              stroke="#000"
+              strokeWidth="8"
+              strokeDasharray={`${progress * 7.54} ${754 - progress * 7.54}`}
+            />
+          </svg>
+        </div>
+
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={toggleTimer}
+            className={`${buttonStyle} ${isRunning ? 'bg-yellow-300' : 'bg-green-300'} flex items-center gap-2`}
+          >
+            {isRunning ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+            {isRunning ? "Pause" : "Start"}
+          </button>
+          <button
+            onClick={resetTimer}
+            className={`${buttonStyle} bg-red-300 flex items-center gap-2`}
+          >
+            <RotateCcw className="w-6 h-6" />
+            Reset
+          </button>
+        </div>
+
+        <div className="mt-8 pt-6 border-t-2 border-black">
+          <h3 className="font-bold mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Customize Timer
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="font-bold block mb-1 text-sm">Focus Duration (min)</label>
+              <input
+                type="number"
+                value={workDuration}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 25;
+                  setWorkDuration(val);
+                  if (!isRunning && !isBreak) setTimeLeft(val * 60);
+                }}
+                className={inputStyle}
+                min="1"
+                max="60"
+                disabled={isRunning}
+              />
+            </div>
+            <div>
+              <label className="font-bold block mb-1 text-sm">Break Duration (min)</label>
+              <input
+                type="number"
+                value={breakDuration}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 5;
+                  setBreakDuration(val);
+                }}
+                className={inputStyle}
+                min="1"
+                max="30"
+                disabled={isRunning}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

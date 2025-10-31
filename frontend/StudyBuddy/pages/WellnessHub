@@ -1,0 +1,316 @@
+
+import React, { useState, useEffect } from "react";
+import { MoodCheckIn } from "@/entities/MoodCheckIn";
+import { User } from "@/entities/User";
+import { InvokeLLM } from "@/integrations/Core";
+import { Heart, Smile, Meh, Frown, AlertCircle, Sparkles, TrendingUp } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { format, subDays } from "date-fns";
+
+export default function WellnessHub() {
+  const [checkIns, setCheckIns] = useState([]);
+  const [todayCheckIn, setTodayCheckIn] = useState(null);
+  const [showCheckInForm, setShowCheckInForm] = useState(false);
+  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
+  const [formData, setFormData] = useState({
+    mood: "okay",
+    stress_level: 5,
+    notes: ""
+  });
+
+  useEffect(() => {
+    loadCheckIns();
+  }, []);
+
+  const loadCheckIns = async () => {
+    try {
+      const user = await User.me();
+      const userCheckIns = await MoodCheckIn.filter({ created_by: user.email }, "-date");
+      setCheckIns(userCheckIns);
+      
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const todaysCheckIn = userCheckIns.find(c => c.date === today);
+      setTodayCheckIn(todaysCheckIn);
+    } catch (error) {
+      console.error("Failed to load check-ins:", error);
+    }
+  };
+
+  const handleCheckIn = async (e) => {
+    e.preventDefault();
+    setIsGeneratingSuggestion(true);
+
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      // Generate AI suggestion
+      const prompt = `A student is feeling ${formData.mood} with a stress level of ${formData.stress_level}/10. ${formData.notes ? `They mentioned: "${formData.notes}".` : ''} 
+      
+      Provide a brief, empathetic wellness suggestion (under 100 words) that includes:
+      1. Acknowledgment of their feelings
+      2. One practical tip to improve their wellbeing
+      3. A motivational message`;
+      
+      const aiSuggestion = await InvokeLLM({ prompt });
+      
+      if (todayCheckIn) {
+        await MoodCheckIn.update(todayCheckIn.id, {
+          ...formData,
+          ai_suggestion: aiSuggestion
+        });
+      } else {
+        await MoodCheckIn.create({
+          date: today,
+          ...formData,
+          ai_suggestion: aiSuggestion
+        });
+      }
+      
+      setShowCheckInForm(false);
+      loadCheckIns();
+    } catch (error) {
+      console.error("Failed to save check-in:", error);
+      alert("Failed to save check-in. Please try again.");
+    }
+    setIsGeneratingSuggestion(false);
+  };
+
+  const getMoodIcon = (mood) => {
+    const icons = {
+      great: <Smile className="w-12 h-12 text-green-600" />,
+      good: <Smile className="w-12 h-12 text-blue-600" />,
+      okay: <Meh className="w-12 h-12 text-yellow-600" />,
+      stressed: <Frown className="w-12 h-12 text-orange-600" />,
+      overwhelmed: <AlertCircle className="w-12 h-12 text-red-600" />
+    };
+    return icons[mood] || icons.okay;
+  };
+
+  const getMoodColor = (mood) => {
+    const colors = {
+      great: "bg-green-200",
+      good: "bg-blue-200",
+      okay: "bg-yellow-200",
+      stressed: "bg-orange-200",
+      overwhelmed: "bg-red-200"
+    };
+    return colors[mood] || colors.okay;
+  };
+
+  const getAverageStress = () => {
+    if (checkIns.length === 0) return 0;
+    const sum = checkIns.reduce((acc, c) => acc + c.stress_level, 0);
+    return (sum / checkIns.length).toFixed(1);
+  };
+
+  const getWeeklyMoodTrend = () => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => format(subDays(new Date(), i), 'yyyy-MM-dd'));
+    const moodValues = { great: 5, good: 4, okay: 3, stressed: 2, overwhelmed: 1 };
+    
+    return last7Days.map(date => {
+      const checkIn = checkIns.find(c => c.date === date);
+      return {
+        date: format(new Date(date), 'MMM d'),
+        value: checkIn ? moodValues[checkIn.mood] : 0
+      };
+    }).reverse();
+  };
+
+  const inputStyle = "w-full p-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#87CEEB] neo-shadow-small";
+  const buttonStyle = "py-3 px-6 border-2 border-black rounded-lg neo-shadow hover:neo-shadow-small active:shadow-none transform active:translate-x-[2px] active:translate-y-[2px] transition-all duration-150 font-bold";
+
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto">
+      <div className="text-center">
+        <Heart className="mx-auto h-16 w-16 mb-4 text-pink-600" />
+        <h1 className="text-4xl font-bold">Wellness Hub</h1>
+        <p className="text-lg text-gray-700 mt-2">
+          Track your mental wellbeing and get personalized support
+        </p>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-5 bg-gradient-to-br from-pink-200 to-rose-200 border-4 border-black rounded-xl neo-shadow text-center"
+        >
+          <Heart className="w-8 h-8 mx-auto mb-2" />
+          <p className="text-2xl font-bold">{checkIns.length}</p>
+          <p className="text-sm font-semibold">Check-ins</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="p-5 bg-gradient-to-br from-purple-200 to-indigo-200 border-4 border-black rounded-xl neo-shadow text-center"
+        >
+          <TrendingUp className="w-8 h-8 mx-auto mb-2" />
+          <p className="text-2xl font-bold">{getAverageStress()}/10</p>
+          <p className="text-sm font-semibold">Avg Stress Level</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="p-5 bg-gradient-to-br from-blue-200 to-cyan-200 border-4 border-black rounded-xl neo-shadow text-center"
+        >
+          {todayCheckIn ? getMoodIcon(todayCheckIn.mood) : <Meh className="w-12 h-12 mx-auto text-gray-400" />}
+          <p className="text-sm font-semibold mt-2">Today's Mood</p>
+        </motion.div>
+      </div>
+
+      {/* Check-in Button */}
+      <div className="text-center">
+        <button
+          onClick={() => setShowCheckInForm(!showCheckInForm)}
+          className={`${buttonStyle} bg-[#98FB98] flex items-center gap-2 mx-auto`}
+        >
+          <Sparkles className="w-5 h-5" />
+          {todayCheckIn ? "Update Today's Check-in" : "Daily Check-in"}
+        </button>
+      </div>
+
+      {/* Check-in Form */}
+      <AnimatePresence>
+        {showCheckInForm && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="p-6 bg-white border-4 border-black rounded-xl neo-shadow"
+          >
+            <h3 className="text-2xl font-bold mb-4">How are you feeling today?</h3>
+            <form onSubmit={handleCheckIn} className="space-y-4">
+              <div>
+                <label className="font-bold block mb-2">Mood</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {['great', 'good', 'okay', 'stressed', 'overwhelmed'].map(mood => (
+                    <button
+                      key={mood}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, mood })}
+                      className={`p-4 border-2 border-black rounded-lg capitalize transition-all ${
+                        formData.mood === mood ? getMoodColor(mood) + ' neo-shadow' : 'bg-gray-100'
+                      }`}
+                    >
+                      {getMoodIcon(mood)}
+                      <p className="text-xs mt-2 font-semibold">{mood}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-2">
+                  Stress Level: {formData.stress_level}/10
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={formData.stress_level}
+                  onChange={(e) => setFormData({ ...formData, stress_level: parseInt(e.target.value) })}
+                  className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer border-2 border-black"
+                />
+                <div className="flex justify-between text-xs text-gray-600 mt-1">
+                  <span>Low</span>
+                  <span>High</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Any notes? (Optional)</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className={inputStyle + " h-24"}
+                  placeholder="What's on your mind?"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCheckInForm(false)}
+                  className={`${buttonStyle} bg-gray-300 flex-1`}
+                  disabled={isGeneratingSuggestion}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className={`${buttonStyle} bg-[#98FB98] flex-1`}
+                  disabled={isGeneratingSuggestion}
+                >
+                  {isGeneratingSuggestion ? "Getting AI Advice..." : "Submit Check-in"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Today's AI Suggestion */}
+      {todayCheckIn?.ai_suggestion && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-6 bg-gradient-to-br from-purple-100 to-pink-100 border-4 border-black rounded-xl neo-shadow"
+        >
+          <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
+            <Sparkles className="w-6 h-6" />
+            Your Personalized Wellness Tip
+          </h3>
+          <p className="text-sm leading-relaxed">{todayCheckIn.ai_suggestion}</p>
+        </motion.div>
+      )}
+
+      {/* Recent Check-ins */}
+      <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+        <h3 className="text-2xl font-bold mb-4">Recent Check-ins</h3>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {checkIns.slice(0, 10).map((checkIn) => (
+            <motion.div
+              key={checkIn.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className={`p-4 border-2 border-black rounded-lg ${getMoodColor(checkIn.mood)}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  {getMoodIcon(checkIn.mood)}
+                  <div>
+                    <p className="font-bold capitalize">{checkIn.mood}</p>
+                    <p className="text-xs text-gray-700">
+                      {format(new Date(checkIn.date), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-sm font-bold bg-white px-3 py-1 rounded-full border border-black">
+                  Stress: {checkIn.stress_level}/10
+                </span>
+              </div>
+              {checkIn.notes && (
+                <p className="text-sm mt-2 italic">"{checkIn.notes}"</p>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {checkIns.length === 0 && !showCheckInForm && (
+        <div className="text-center py-10 px-6 bg-white border-4 border-black rounded-xl neo-shadow">
+          <Heart className="mx-auto h-16 w-16 mb-4 text-gray-300" />
+          <h3 className="text-2xl font-bold">Start Your Wellness Journey</h3>
+          <p className="mt-2 text-gray-600">
+            Take a moment to check in with yourself and get personalized AI support!
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

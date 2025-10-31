@@ -1,0 +1,40 @@
+{
+  "name": "RewardPoint",
+  "type": "object",
+  "properties": {
+    "points": {
+      "type": "number",
+      "description": "Number of points earned"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Why points were awarded"
+    },
+    "activity_type": {
+      "type": "string",
+      "enum": [
+        "assignment_submitted",
+        "on_time_submission",
+        "good_grade",
+        "streak",
+        "participation",
+        "achievement"
+      ],
+      "description": "Type of activity that earned points"
+    },
+    "related_id": {
+      "type": "string",
+      "description": "ID of related entity (assignment, achievement, etc.)"
+    }
+  },
+  "required": [
+    "points",
+    "reason",
+    "activity_type"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

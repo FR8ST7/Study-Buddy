@@ -1,0 +1,276 @@
+import React, { useState, useEffect } from "react";
+import { RewardPoint } from "@/entities/RewardPoint";
+import { Badge } from "@/entities/Badge";
+import { User } from "@/entities/User";
+import { Trophy, Star, Award, TrendingUp, Gift, Zap } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
+
+export default function RewardsHub() {
+  const [user, setUser] = useState(null);
+  const [points, setPoints] = useState([]);
+  const [badges, setBadges] = useState([]);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [currentLevel, setCurrentLevel] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const currentUser = await User.me();
+      setUser(currentUser);
+      
+      const userPoints = await RewardPoint.filter({ created_by: currentUser.email }, "-created_date");
+      setPoints(userPoints);
+      
+      const userBadges = await Badge.filter({ created_by: currentUser.email }, "-earned_date");
+      setBadges(userBadges);
+      
+      const total = userPoints.reduce((sum, p) => sum + p.points, 0);
+      setTotalPoints(total);
+      setCurrentLevel(Math.floor(total / 100) + 1);
+      
+      // Update user's total points
+      await User.updateMyUserData({
+        total_points: total,
+        current_level: Math.floor(total / 100) + 1
+      });
+      
+      // Check for level-up badges
+      await checkLevelBadges(Math.floor(total / 100) + 1, userBadges);
+      
+    } catch (error) {
+      console.error("Failed to load rewards data:", error);
+    }
+    setIsLoading(false);
+  };
+
+  const checkLevelBadges = async (level, currentBadges) => {
+    const badgeNames = currentBadges.map(b => b.name);
+    
+    const levelBadges = [
+      { level: 5, name: "Rising Star", description: "Reached level 5", icon: "⭐", category: "milestone", rarity: "common" },
+      { level: 10, name: "Dedicated Learner", description: "Reached level 10", icon: "📚", category: "milestone", rarity: "rare" },
+      { level: 20, name: "Study Champion", description: "Reached level 20", icon: "🏆", category: "milestone", rarity: "epic" },
+      { level: 50, name: "Legend", description: "Reached level 50", icon: "👑", category: "milestone", rarity: "legendary" }
+    ];
+    
+    for (const badge of levelBadges) {
+      if (level >= badge.level && !badgeNames.includes(badge.name)) {
+        await Badge.create({
+          name: badge.name,
+          description: badge.description,
+          icon: badge.icon,
+          category: badge.category,
+          rarity: badge.rarity,
+          earned_date: format(new Date(), 'yyyy-MM-dd')
+        });
+      }
+    }
+  };
+
+  const pointsToNextLevel = () => {
+    return (currentLevel * 100) - totalPoints;
+  };
+
+  const getLevelProgress = () => {
+    const pointsInCurrentLevel = totalPoints % 100;
+    return (pointsInCurrentLevel / 100) * 100;
+  };
+
+  const getBadgeColor = (rarity) => {
+    const colors = {
+      common: "bg-gray-200",
+      rare: "bg-blue-200",
+      epic: "bg-purple-200",
+      legendary: "bg-yellow-200"
+    };
+    return colors[rarity] || "bg-gray-200";
+  };
+
+  const rewardStore = [
+    { name: "Custom Theme", cost: 500, icon: "🎨", description: "Unlock exclusive theme colors" },
+    { name: "Premium Badge", cost: 750, icon: "💎", description: "Show off your dedication" },
+    { name: "Focus Music", cost: 300, icon: "🎵", description: "Unlock premium focus playlists" },
+    { name: "Study Streak Shield", cost: 1000, icon: "🛡️", description: "Protect your streak for 3 days" },
+    { name: "AI Assistant Boost", cost: 600, icon: "🤖", description: "Get detailed AI explanations" },
+    { name: "Certificate Generator", cost: 1200, icon: "📜", description: "Generate achievement certificates" }
+  ];
+
+  const redeemReward = (reward) => {
+    if (totalPoints >= reward.cost) {
+      alert(`🎉 You've redeemed: ${reward.name}! (Feature coming soon)`);
+    } else {
+      alert(`Need ${reward.cost - totalPoints} more points to unlock this!`);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-10">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-black mx-auto"></div>
+        <p className="mt-4 font-bold">Loading rewards...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center">
+        <Trophy className="mx-auto h-16 w-16 mb-4 text-yellow-600" />
+        <h1 className="text-4xl font-bold">Rewards Hub</h1>
+        <p className="text-lg text-gray-700 mt-2">
+          Track your achievements and redeem rewards!
+        </p>
+      </div>
+
+      {/* Level & Points Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-6 bg-gradient-to-br from-yellow-200 to-orange-200 border-4 border-black rounded-xl neo-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <Star className="w-8 h-8" />
+            <span className="text-3xl font-bold">Lv. {currentLevel}</span>
+          </div>
+          <p className="font-bold mb-2">Current Level</p>
+          <div className="w-full h-4 bg-white border-2 border-black rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-500"
+              style={{ width: `${getLevelProgress()}%` }}
+            />
+          </div>
+          <p className="text-xs mt-2 font-semibold">{pointsToNextLevel()} points to next level</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="p-6 bg-gradient-to-br from-green-200 to-emerald-200 border-4 border-black rounded-xl neo-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <Zap className="w-8 h-8" />
+            <span className="text-3xl font-bold">{totalPoints}</span>
+          </div>
+          <p className="font-bold">Total Points</p>
+          <p className="text-sm mt-2">Keep earning to unlock more rewards!</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="p-6 bg-gradient-to-br from-purple-200 to-pink-200 border-4 border-black rounded-xl neo-shadow"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <Award className="w-8 h-8" />
+            <span className="text-3xl font-bold">{badges.length}</span>
+          </div>
+          <p className="font-bold">Badges Earned</p>
+          <p className="text-sm mt-2">Unlock more by completing challenges!</p>
+        </motion.div>
+      </div>
+
+      {/* Recent Points Activity */}
+      <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <TrendingUp className="w-6 h-6" />
+          Recent Activity
+        </h2>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {points.slice(0, 10).map((point) => (
+            <motion.div
+              key={point.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center justify-between p-3 bg-gray-50 border-2 border-black rounded-lg"
+            >
+              <div>
+                <p className="font-bold">{point.reason}</p>
+                <p className="text-xs text-gray-600">
+                  {format(new Date(point.created_date), "MMM d, yyyy 'at' h:mm a")}
+                </p>
+              </div>
+              <span className="text-2xl font-bold text-green-600">+{point.points}</span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Badges Collection */}
+      <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <Award className="w-6 h-6" />
+          Badge Collection
+        </h2>
+        {badges.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {badges.map((badge) => (
+              <motion.div
+                key={badge.id}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className={`p-4 ${getBadgeColor(badge.rarity)} border-4 border-black rounded-xl text-center`}
+              >
+                <div className="text-4xl mb-2">{badge.icon}</div>
+                <h3 className="font-bold">{badge.name}</h3>
+                <p className="text-xs mt-1">{badge.description}</p>
+                <span className="text-xs font-bold capitalize bg-white px-2 py-1 rounded-full border border-black inline-block mt-2">
+                  {badge.rarity}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Award className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+            <p className="text-gray-600">Start earning badges by completing activities!</p>
+          </div>
+        )}
+      </div>
+
+      {/* Reward Store */}
+      <div className="p-6 bg-white border-4 border-black rounded-xl neo-shadow">
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <Gift className="w-6 h-6" />
+          Reward Store
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {rewardStore.map((reward, idx) => (
+            <motion.div
+              key={reward.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              className="p-5 bg-gradient-to-br from-blue-100 to-purple-100 border-4 border-black rounded-xl"
+            >
+              <div className="text-center mb-3">
+                <div className="text-5xl mb-2">{reward.icon}</div>
+                <h3 className="font-bold text-lg">{reward.name}</h3>
+                <p className="text-sm text-gray-700 mt-1">{reward.description}</p>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-2xl font-bold text-yellow-600">{reward.cost} pts</span>
+                <button
+                  onClick={() => redeemReward(reward)}
+                  className={`py-2 px-4 border-2 border-black rounded-lg font-bold text-sm neo-shadow hover:neo-shadow-small active:shadow-none transition-all ${
+                    totalPoints >= reward.cost ? 'bg-green-300' : 'bg-gray-300'
+                  }`}
+                  disabled={totalPoints < reward.cost}
+                >
+                  {totalPoints >= reward.cost ? 'Redeem' : 'Locked'}
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

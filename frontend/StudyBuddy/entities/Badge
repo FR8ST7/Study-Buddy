@@ -1,0 +1,56 @@
+{
+  "name": "Badge",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Badge name"
+    },
+    "description": {
+      "type": "string",
+      "description": "What this badge represents"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Emoji or icon for badge"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "productivity",
+        "consistency",
+        "excellence",
+        "collaboration",
+        "milestone"
+      ],
+      "description": "Badge category"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": [
+        "common",
+        "rare",
+        "epic",
+        "legendary"
+      ],
+      "default": "common",
+      "description": "Badge rarity"
+    },
+    "earned_date": {
+      "type": "string",
+      "format": "date",
+      "description": "When badge was earned"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "icon",
+    "category"
+  ],
+  "rls": {
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
